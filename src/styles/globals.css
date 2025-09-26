@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+}
+.dark {
+  --bg: #0b1220;
+  --fg: #e6edf6;
+}
+
+html,
+body,
+:root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+}
+body {
+  @apply antialiased;
+}
+
+@layer components {
+  .container {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+}
+
+@layer base {
+  :root {
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
+  }
+}
