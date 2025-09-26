@@ -1,23 +1,94 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import { MdPerson, MdLock, MdVisibility, MdVisibilityOff } from 'react-icons/md'
 import { FcGoogle } from 'react-icons/fc'
-import { MdEmail, MdLock, MdVisibility } from 'react-icons/md'
 import Link from 'next/link'
+import { useRouter } from 'next/router'
+import { useFormik } from 'formik'
+import * as Yup from 'yup'
+import { authService } from '@/services'
+import { useAuthStore } from '@/stores'
+import type { ApiError } from '@/lib/api'
+import toast from 'react-hot-toast'
+
+// Validation schema
+const loginSchema = Yup.object({
+  username: Yup.string()
+    .min(3, 'User Name must be at least 3 characters')
+    .max(50, 'User Name must be less than 50 characters')
+    .matches(
+      /^[a-zA-Z0-9_]+$/,
+      'User Name can only contain letters, numbers, and underscores'
+    )
+    .required('User Name is required'),
+  password: Yup.string()
+    .min(6, 'Password must be at least 6 characters')
+    .required('Password is required')
+})
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [rememberMe, setRememberMe] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const router = useRouter()
+  const { isLoading, setLoading, isAuthenticated } = useAuthStore()
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Handle login logic here
-    console.log('Login:', { email, password, rememberMe })
-  }
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && authService.isAuthenticated()) {
+      router.replace('/')
+    }
+  }, [isAuthenticated, router])
+
+  const formik = useFormik({
+    initialValues: {
+      username: '',
+      password: '',
+      rememberMe: false
+    },
+    validationSchema: loginSchema,
+    onSubmit: async (values) => {
+      setLoading(true)
+
+      try {
+        const response = await authService.login({
+          user_id: values.username,
+          password: values.password
+        })
+
+        if (response.success) {
+          toast.success('Login successful!')
+          const redirectTo = (router.query.redirect as string) || '/'
+          router.push(redirectTo)
+        } else {
+          toast.error(response.message || 'Login failed')
+        }
+      } catch (error: any) {
+        console.log('🚀 ~ LoginPage ~ error:', error)
+        const apiError = error as ApiError
+        toast.error(apiError.message || 'An unexpected error occurred')
+      } finally {
+        setLoading(false)
+      }
+    }
+  })
 
   const handleGoogleSignIn = () => {
-    // Handle Google sign in logic here
-    console.log('Google sign in')
+    // TODO: Implement Google OAuth integration
+    console.log('Google sign in - not implemented yet')
+  }
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div
+        className='min-h-screen flex items-center justify-center'
+        data-theme='dark'
+      >
+        <div className='flex flex-col items-center gap-4'>
+          <span className='loading loading-spinner loading-lg'></span>
+          <p className='text-base-content/70'>Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -50,43 +121,49 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className='space-y-4'>
+              <form onSubmit={formik.handleSubmit} className='space-y-4'>
                 {/* Google Sign In Button */}
                 <button
                   type='button'
                   onClick={handleGoogleSignIn}
                   className='btn btn-outline w-full'
+                  disabled={isLoading}
                 >
-                  <Image
-                    src='/icons/gmail.svg'
-                    alt='Gmail Icon'
-                    width={24}
-                    height={24}
-                    className='mr-1'
-                  />
+                  <FcGoogle className='w-5 h-5' />
                   Sign in with Gmail
                 </button>
 
                 {/* Divider */}
                 <div className='divider'>Or</div>
 
-                {/* Email Input */}
+                {/* User Name Input */}
                 <div className='form-control'>
                   <label className='label'>
-                    <span className='label-text'>Email</span>
+                    <span className='label-text'>User Name</span>
                   </label>
                   <div className='relative'>
-                    <MdEmail className='w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/50 pointer-events-none z-10' />
+                    <MdPerson className='w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/50 pointer-events-none z-10' />
                     <input
-                      type='email'
-                      placeholder='Email'
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className='input input-bordered w-full pl-10'
-                      autoComplete='new-password'
-                      required
+                      type='text'
+                      name='username'
+                      placeholder='User Name'
+                      value={formik.values.username}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      className={`input input-bordered w-full pl-10 ${
+                        formik.touched.username && formik.errors.username
+                          ? 'input-error'
+                          : ''
+                      }`}
                     />
                   </div>
+                  {formik.touched.username && formik.errors.username && (
+                    <div className='label'>
+                      <span className='label-text-alt text-error'>
+                        {formik.errors.username}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Password Input */}
@@ -97,21 +174,39 @@ export default function LoginPage() {
                   <div className='relative'>
                     <MdLock className='w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/50 pointer-events-none z-10' />
                     <input
-                      type='password'
+                      type={showPassword ? 'text' : 'password'}
+                      name='password'
                       placeholder='Password'
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className='input input-bordered w-full pl-10 pr-10'
-                      autoComplete='new-password'
-                      required
+                      value={formik.values.password}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      className={`input input-bordered w-full pl-10 pr-10 ${
+                        formik.touched.password && formik.errors.password
+                          ? 'input-error'
+                          : ''
+                      }`}
+                      autoComplete='off'
                     />
                     <button
                       type='button'
-                      className='absolute right-3 top-1/2 -translate-y-1/2 z-10'
+                      onClick={() => setShowPassword(!showPassword)}
+                      className='absolute right-3 top-1/2 -translate-y-1/2 z-10 hover:scale-110 transition-transform'
+                      tabIndex={-1}
                     >
-                      <MdVisibility className='w-5 h-5 text-base-content/50 hover:text-base-content' />
+                      {showPassword ? (
+                        <MdVisibilityOff className='w-5 h-5 text-base-content/50 hover:text-base-content' />
+                      ) : (
+                        <MdVisibility className='w-5 h-5 text-base-content/50 hover:text-base-content' />
+                      )}
                     </button>
                   </div>
+                  {formik.touched.password && formik.errors.password && (
+                    <div className='label'>
+                      <span className='label-text-alt text-error'>
+                        {formik.errors.password}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Remember me and Forgot password */}
@@ -119,20 +214,32 @@ export default function LoginPage() {
                   <label className='label cursor-pointer'>
                     <input
                       type='checkbox'
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
+                      name='rememberMe'
+                      checked={formik.values.rememberMe}
+                      onChange={formik.handleChange}
                       className='checkbox checkbox-sm'
                     />
                     <span className='label-text'>Remember me</span>
                   </label>
-                  <a href='#' className='text-sm'>
+                  <a href='#' className='link link-primary text-sm'>
                     Forgot Password?
                   </a>
                 </div>
 
                 {/* Login Button */}
-                <button type='submit' className='btn btn-[#1E90FF] w-full'>
-                  Log in
+                <button
+                  type='submit'
+                  className='btn btn-primary w-full'
+                  disabled={isLoading || !formik.isValid || !formik.dirty}
+                >
+                  {isLoading ? (
+                    <>
+                      <span className='loading loading-spinner loading-sm'></span>
+                      Logging in...
+                    </>
+                  ) : (
+                    'Log in'
+                  )}
                 </button>
               </form>
             </div>
