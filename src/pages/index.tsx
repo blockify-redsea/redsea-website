@@ -1,6 +1,5 @@
 import { useAuthStore } from '@/stores'
 import { authService } from '@/services'
-import DashboardLayout from '@/layouts/DashboardLayout'
 
 export default function HomePage() {
   const { user } = useAuthStore()
@@ -10,7 +9,7 @@ export default function HomePage() {
   }
 
   return (
-    <DashboardLayout>
+    <>
       {/* Page Header */}
       <div className='flex justify-between items-center mb-8'>
         <h1 className='text-2xl font-bold text-base-content'>Requests</h1>
@@ -171,6 +170,6 @@ export default function HomePage() {
           </table>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   )
 }

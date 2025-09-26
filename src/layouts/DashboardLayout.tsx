@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { useAuthStore } from '@/stores'
 import { getMenuByRole } from '@/lib/menuData'
+import { UserRank, isAdmin } from '@/types/enums'
 import Header from '@/components/Header'
 import Sidebar from '@/components/Sidebar'
 
@@ -18,7 +19,7 @@ export default function DashboardLayout({
   const getUserRole = (): 'admin' | 'member' => {
     if (!user) return 'member'
 
-    return user.rank > 1 ? 'admin' : 'member'
+    return isAdmin(user.rank as UserRank) ? 'admin' : 'member'
   }
 
   const userRole = getUserRole()

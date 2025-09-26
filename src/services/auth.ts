@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api/client'
 import { API_ENDPOINTS } from '@/lib/api/config'
 import { useAuthStore } from '@/stores'
+import { UserRank, isPendingApproval } from '@/types/enums'
 import type {
   LoginRequest,
   LoginResponse,
@@ -17,15 +18,18 @@ export class AuthService {
         credentials
       )
 
-      // Check if user rank is 0 (not approved)
-      if (response.data?.user?.rank === 0) {
+      // Check if user is pending approval
+      if (
+        response.data?.user?.rank !== undefined &&
+        isPendingApproval(response.data.user.rank as UserRank)
+      ) {
         throw { success: false, message: 'Your account is not approved yet.' }
       }
 
       // Only proceed if rank is not 0
       if (response.success && response.data?.access_token) {
         const { login } = useAuthStore.getState()
-        login(response.data)
+        login(response.data as any)
 
         // Set auth token for API client
         apiClient.setAuthToken(response.data.access_token)
@@ -79,15 +83,41 @@ export class AuthService {
     return user
   }
 
+  // Decode user info from JWT token
+  static getUserFromToken(): any | null {
+    try {
+      const token = this.getAuthToken()
+      if (!token) return null
+
+      // Decode JWT payload (basic decode, not verifying signature)
+      const base64Url = token.split('.')[1]
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+      const jsonPayload = decodeURIComponent(
+        window
+          .atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      )
+
+      return JSON.parse(jsonPayload)
+    } catch (error) {
+      console.error('Error decoding token:', error)
+      return null
+    }
+  }
+
   // Get auth token
   static getAuthToken(): string | null {
-    const { access_token } = useAuthStore.getState()
-    return access_token
+    const { getAccessToken } = useAuthStore.getState()
+    return getAccessToken()
   }
 
   // Initialize auth state (call on app startup)
   static initializeAuth(): void {
-    const { access_token, isTokenExpired, clearAuth } = useAuthStore.getState()
+    const { getAccessToken, isTokenExpired, clearAuth, user, setLoading } =
+      useAuthStore.getState()
+    const access_token = getAccessToken()
 
     if (access_token) {
       // Check if token is expired
@@ -98,6 +128,33 @@ export class AuthService {
       } else {
         // Token is valid, set it in API client
         apiClient.setAuthToken(access_token)
+
+        // If we have token but no user data (after page refresh),
+        // try to restore user data from token
+        if (!user) {
+          const tokenUser = this.getUserFromToken()
+          if (tokenUser) {
+            // Reconstruct user object from token data
+            const userData = {
+              id: tokenUser.id,
+              user_id: tokenUser.user_id,
+              nickname: tokenUser.nickname,
+              email: tokenUser.email,
+              rank: tokenUser.rank,
+              is_active: true, // Assume active if token is valid
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }
+
+            // Set user data and authenticated state
+            const { setUser } = useAuthStore.getState()
+            setUser(userData)
+          } else {
+            // Token exists but can't decode user, just set authenticated
+            const { setAuthenticated } = useAuthStore.getState()
+            setAuthenticated(true)
+          }
+        }
       }
     }
   }
@@ -105,7 +162,9 @@ export class AuthService {
   // Refresh token method
   static async refreshToken(): Promise<boolean> {
     try {
-      const { refresh_token, updateTokens, clearAuth } = useAuthStore.getState()
+      const { getRefreshToken, updateTokens, clearAuth } =
+        useAuthStore.getState()
+      const refresh_token = getRefreshToken()
 
       if (!refresh_token) {
         clearAuth()
@@ -117,6 +176,7 @@ export class AuthService {
         data?: {
           access_token: string
           refresh_token: string
+          token_type: string
           expires_in: number
         }
       }>(API_ENDPOINTS.AUTH.REFRESH, {

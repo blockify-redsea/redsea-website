@@ -7,6 +7,7 @@ import {
   shouldRedirectFromAuth,
   routeConfig
 } from '@/config/routes'
+import DashboardLayout from '@/layouts/DashboardLayout'
 
 // Loading component
 function AppLoading() {
@@ -38,7 +39,6 @@ export function RouteGuard({ children }: RouteGuardProps) {
 
       // Nếu là public route, cho phép truy cập
       if (isPublicRoute(currentPath)) {
-        // Nếu đã authenticated và đang ở login/register, redirect về home
         if (isAuthenticated && shouldRedirectFromAuth(currentPath)) {
           router.replace(routeConfig.redirects.afterLogin)
           return
@@ -54,10 +54,7 @@ export function RouteGuard({ children }: RouteGuardProps) {
 
         if (!refreshSuccess) {
           // No valid token, redirect to login with return URL
-          const redirectUrl = `${
-            routeConfig.redirects.unauthorized
-          }?redirect=${encodeURIComponent(currentPath)}`
-          router.replace(redirectUrl)
+          router.replace(routeConfig.redirects.unauthorized)
           return
         }
       }
@@ -76,5 +73,12 @@ export function RouteGuard({ children }: RouteGuardProps) {
     return <AppLoading />
   }
 
+  // If user is authenticated and on protected route, use DashboardLayout
+  const currentPath = router.asPath
+  if (isAuthenticated && !isPublicRoute(currentPath)) {
+    return <DashboardLayout>{children}</DashboardLayout>
+  }
+
+  // For public routes, render children directly
   return <>{children}</>
 }
